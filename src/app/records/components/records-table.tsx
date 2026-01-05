@@ -1,378 +1,338 @@
-import { Record } from "@/types/record"
-import { Skeleton } from "@/components/ui/skeleton"
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
-import { Download, Trash2, Loader2 } from "lucide-react"
-import { useState } from "react"
-import { DeleteConfirmationDialog } from "./delete-confirmation-dialog"
-import { getAuthHeaders } from "@/lib/fetch-utils"
-import { addDownload } from "@/lib/downloads"
+import { Record } from "@/types/record";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import { Edit, Trash2, Loader2 } from "lucide-react";
+import { useState } from "react";
+import { DeleteConfirmationDialog } from "./delete-confirmation-dialog";
+import { EditRecordModal } from "./edit-record-modal";
 
 interface RecordsTableProps {
-  records: Record[]
-  isLoading?: boolean
-  isError?: Error | null
-  onLoadMore?: () => void
-  hasMore?: boolean
-  onRecordUpdated?: () => void
-  onRecordDeleted?: () => void
+	records: Record[];
+	isLoading?: boolean;
+	isError?: Error | null;
+	onLoadMore?: () => void;
+	hasMore?: boolean;
+	onRecordUpdated?: () => void;
+	onRecordDeleted?: () => void;
 }
 
 // Helper function to get the display ID (ExternalId from fields, or fallback to id)
 function getDisplayId(record: Record): string {
-  if (record.fields?.ExternalId) {
-    return record.fields.ExternalId;
-  }
-  return record.id || '';
+	if (record.fields?.ExternalId) {
+		return record.fields.ExternalId;
+	}
+	return record.id || "";
 }
 
 // Helper function to check if a string is a URL
 function isUrl(str: string): boolean {
-  if (!str || typeof str !== 'string') return false;
-  
-  // Check for common URL patterns
-  const urlPattern = /^(https?:\/\/|www\.|ftp:\/\/|mailto:)/i;
-  if (urlPattern.test(str)) return true;
-  
-  // Try to parse as URL (will work for URLs with protocol)
-  try {
-    const url = new URL(str);
-    return url.protocol === 'http:' || url.protocol === 'https:';
-  } catch {
-    // Check if it looks like a domain (contains . and has valid domain structure)
-    const domainPattern = /^[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9]?\.[a-zA-Z]{2,}/;
-    return domainPattern.test(str);
-  }
+	if (!str || typeof str !== "string") return false;
+
+	// Check for common URL patterns
+	const urlPattern = /^(https?:\/\/|www\.|ftp:\/\/|mailto:)/i;
+	if (urlPattern.test(str)) return true;
+
+	// Try to parse as URL (will work for URLs with protocol)
+	try {
+		const url = new URL(str);
+		return url.protocol === "http:" || url.protocol === "https:";
+	} catch {
+		// Check if it looks like a domain (contains . and has valid domain structure)
+		const domainPattern =
+			/^[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9]?\.[a-zA-Z]{2,}/;
+		return domainPattern.test(str);
+	}
 }
 
 // Helper function to truncate URL in the middle
 function truncateUrl(url: string, maxLength: number = 50): string {
-  if (url.length <= maxLength) return url;
-  
-  const startLength = Math.floor(maxLength / 2) - 2;
-  const endLength = Math.floor(maxLength / 2) - 2;
-  const start = url.substring(0, startLength);
-  const end = url.substring(url.length - endLength);
-  
-  return `${start}...${end}`;
+	if (url.length <= maxLength) return url;
+
+	const startLength = Math.floor(maxLength / 2) - 2;
+	const endLength = Math.floor(maxLength / 2) - 2;
+	const start = url.substring(0, startLength);
+	const end = url.substring(url.length - endLength);
+
+	return `${start}...${end}`;
 }
 
 // Helper function to truncate regular text
 function truncateText(text: string, maxLength: number = 30): string {
-  if (text.length <= maxLength) return text;
-  return text.substring(0, maxLength - 3) + '...';
+	if (text.length <= maxLength) return text;
+	return text.substring(0, maxLength - 3) + "...";
 }
 
 function getDisplayableFields(record: Record): { [key: string]: string } {
-  const displayableFields: { [key: string]: string } = {}
-  
-  // Add customerId to excluded fields here too
-  const excludedTopLevelFields = ['id', '_id', 'customerId', 'recordType', '__v', 'createdAt', 'updatedAt', 'created_at', 'updated_at', 'uri'];
-  
-  // Get string fields from top level
-  Object.entries(record).forEach(([key, value]) => {
-    if (
-      typeof value === 'string' && 
-      !key.startsWith('_') && 
-      !excludedTopLevelFields.includes(key)
-    ) {
-      displayableFields[key] = value
-    }
-  })
+	const displayableFields: { [key: string]: string } = {};
 
-  // Get string fields from nested fields object
-  if (record.fields) {
-    Object.entries(record.fields).forEach(([key, value]) => {
-      if (
-        typeof value === 'string' &&
-        !key.startsWith('_') &&
-        key !== 'id' && // Exclude id from fields since we have it at top level
-        key !== 'ExternalId' // Exclude ExternalId since we use it as the display ID
-      ) {
-        displayableFields[key] = value
-      }
-    })
-  }
+	// Add customerId to excluded fields here too
+	const excludedTopLevelFields = [
+		"id",
+		"_id",
+		"customerId",
+		"recordType",
+		"__v",
+		"createdAt",
+		"updatedAt",
+		"created_at",
+		"updated_at",
+		"uri",
+	];
 
-  return displayableFields
+	// Get string fields from top level
+	Object.entries(record).forEach(([key, value]) => {
+		if (
+			typeof value === "string" &&
+			!key.startsWith("_") &&
+			!excludedTopLevelFields.includes(key)
+		) {
+			displayableFields[key] = value;
+		}
+	});
+
+	// Get string fields from nested fields object
+	if (record.fields) {
+		Object.entries(record.fields).forEach(([key, value]) => {
+			if (
+				typeof value === "string" &&
+				!key.startsWith("_") &&
+				key !== "id" && // Exclude id from fields since we have it at top level
+				key !== "ExternalId" // Exclude ExternalId since we use it as the display ID
+			) {
+				displayableFields[key] = value;
+			}
+		});
+	}
+
+	return displayableFields;
 }
 
 export function RecordsTable({
-  records,
-  isLoading = false,
-  isError = null,
-  onLoadMore,
-  hasMore,
-  onRecordUpdated,
-  onRecordDeleted,
+	records,
+	isLoading = false,
+	isError = null,
+	onLoadMore,
+	hasMore,
+	onRecordUpdated,
+	onRecordDeleted,
 }: RecordsTableProps) {
-  const [selectedRecord, setSelectedRecord] = useState<Record | null>(null)
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
-  const [downloadingFileId, setDownloadingFileId] = useState<string | null>(null)
+	const [selectedRecord, setSelectedRecord] = useState<Record | null>(null);
+	const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+	const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
-  const formatDate = (dateString?: string) => {
-    if (!dateString) return "-";
-    try {
-      return new Date(dateString).toLocaleString();
-    } catch (error) {
-      return "-";
-    }
-  };
+	const formatDate = (dateString?: string) => {
+		if (!dateString) return "-";
+		try {
+			return new Date(dateString).toLocaleString();
+		} catch (error) {
+			return "-";
+		}
+	};
 
-  const handleDownload = async (record: Record) => {
-    // Use the MongoDB id field (not ExternalId)
-    const fileId = record.id;
-    
-    if (!fileId) {
-      console.error("No file ID found for record");
-      return;
-    }
+	const handleEdit = (record: Record) => {
+		setSelectedRecord(record);
+		setIsEditModalOpen(true);
+	};
 
-    setDownloadingFileId(fileId);
-    
-    try {
-      const response = await fetch("/api/records/download", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...getAuthHeaders(),
-        },
-        body: JSON.stringify({ fileId }),
-      });
+	const handleDelete = (record: Record) => {
+		setSelectedRecord(record);
+		setIsDeleteDialogOpen(true);
+	};
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to download file");
-      }
+	const handleDeleteComplete = () => {
+		setIsDeleteDialogOpen(false);
+		setSelectedRecord(null);
+		onRecordDeleted?.();
+	};
 
-      const data = await response.json();
+	if (isError) {
+		return (
+			<div className="rounded-md border p-8 text-center">
+				<p className="text-muted-foreground">
+					Error loading records. Please try again later.
+				</p>
+			</div>
+		);
+	}
 
-      if (data.error) {
-        throw new Error(data.error);
-      }
+	return (
+		<div className="relative">
+			<ScrollArea className="h-[800px] w-full" scrollHideDelay={0}>
+				<div className="space-y-3 p-4 pr-6">
+					{isLoading ? (
+						Array.from({ length: 3 }).map((_, index) => (
+							<div
+								key={`skeleton-${index}`}
+								className="rounded-xl bg-sky-100/60 dark:bg-sky-900/20 p-4 shadow-sm"
+							>
+								<Skeleton className="h-7 w-1/3 mb-3" />
+								<div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+									<Skeleton className="h-12 w-full" />
+									<Skeleton className="h-12 w-full" />
+									<Skeleton className="h-12 w-full" />
+									<Skeleton className="h-12 w-full" />
+								</div>
+							</div>
+						))
+					) : records.length === 0 ? (
+						<div className="text-center text-muted-foreground py-8">
+							No records found
+						</div>
+					) : (
+						records.map((record) => {
+							const displayFields = getDisplayableFields(record);
+							const displayId = getDisplayId(record);
 
-      // Extract downloadUri from the response
-      const downloadUri = data.data?.downloadUri || data.data?.url;
-      
-      if (downloadUri) {
-        // Store the download in localStorage for tracking
-        addDownload({
-          fileId: fileId,
-          fileName: record.name || `File ${record.fields?.ExternalId || fileId}`,
-          downloadUri: downloadUri,
-          timestamp: new Date().toISOString(),
-          recordName: record.name,
-        });
-        
-        // Dispatch custom event to notify downloads page
-        window.dispatchEvent(new CustomEvent('download-added'));
-      }
+							return (
+								<div
+									key={`${displayId}-${record.customerId}`}
+									className="rounded-xl bg-sky-100/60 dark:bg-sky-900/20 p-4 shadow-sm hover:shadow-md transition-shadow group relative"
+								>
+									<div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+										<button
+											onClick={() => handleEdit(record)}
+											className="p-2 rounded-full hover:bg-sky-200/60 dark:hover:bg-sky-800/60 transition-colors"
+											title="Edit record"
+										>
+											<Edit className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+										</button>
+										<button
+											onClick={() => handleDelete(record)}
+											className="p-2 rounded-full hover:bg-red-200/60 dark:hover:bg-red-800/60 transition-colors"
+											title="Delete record"
+										>
+											<Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />
+										</button>
+									</div>
+									<div className="mb-3">
+										<h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 leading-tight truncate">
+											ID: {displayId}
+										</h3>
+										{record.name && (
+											<p
+												className="text-sm text-gray-600 dark:text-gray-400 truncate"
+												title={record.name}
+											>
+												{truncateText(record.name, 50)}
+											</p>
+										)}
+									</div>
+									<div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+										{Object.entries(displayFields).map(([key, value]) => {
+											const isUrlValue = isUrl(value);
+											const displayValue = isUrlValue
+												? truncateUrl(value, 50)
+												: truncateText(value, 30);
 
-      // Handle the download response
-      // The response might contain a download URL or file data
-      if (data.data?.downloadUri) {
-        // If there's a downloadUri (S3 link), we'll track it but not auto-download
-        // User can download from the downloads page
-        console.log("Download URI received:", data.data.downloadUri);
-      } else if (data.data?.url) {
-        // If there's a URL, open it in a new tab
-        window.open(data.data.url, "_blank");
-      } else if (data.data?.fileData) {
-        // If there's file data, create a blob and download it
-        const blob = new Blob([data.data.fileData], { type: data.data.mimeType || "application/octet-stream" });
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = data.data.fileName || `file-${fileId}`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-      } else if (data.data) {
-        // If the data itself is a URL or file content, handle it
-        console.log("Download response:", data.data);
-      }
-    } catch (error) {
-      console.error("Error downloading file:", error);
-      alert(error instanceof Error ? error.message : "Failed to download file");
-    } finally {
-      setDownloadingFileId(null);
-    }
-  };
+											// Normalize URL for href (add protocol if missing)
+											const getUrlHref = (url: string): string => {
+												if (
+													url.startsWith("http://") ||
+													url.startsWith("https://") ||
+													url.startsWith("mailto:") ||
+													url.startsWith("ftp://")
+												) {
+													return url;
+												}
+												if (url.startsWith("www.")) {
+													return `https://${url}`;
+												}
+												return `https://${url}`;
+											};
 
-  const handleDelete = (record: Record) => {
-    setSelectedRecord(record)
-    setIsDeleteDialogOpen(true)
-  }
+											return (
+												<div
+													key={key}
+													className="flex flex-col gap-0.5 min-w-0"
+												>
+													<span className="text-sm text-gray-500 dark:text-gray-400 capitalize truncate">
+														{key}
+													</span>
+													{isUrlValue ? (
+														<a
+															href={getUrlHref(value)}
+															target="_blank"
+															rel="noopener noreferrer"
+															className="text-sm leading-tight text-blue-600 dark:text-blue-400 hover:underline truncate"
+															title={value}
+														>
+															{displayValue}
+														</a>
+													) : (
+														<span
+															className="text-sm leading-tight truncate"
+															title={value}
+														>
+															{displayValue}
+														</span>
+													)}
+												</div>
+											);
+										})}
 
-  const handleDeleteComplete = () => {
-    setIsDeleteDialogOpen(false)
-    setSelectedRecord(null)
-    onRecordDeleted?.()
-  }
+										{/* Show created/updated time if available */}
+										{(record.createdTime || record.created_at) && (
+											<div className="flex flex-col gap-0.5">
+												<span className="text-sm text-gray-500 dark:text-gray-400">
+													Created
+												</span>
+												<span className="text-sm leading-tight">
+													{formatDate(record.createdTime || record.created_at)}
+												</span>
+											</div>
+										)}
 
-  if (isError) {
-    return (
-      <div className="rounded-md border p-8 text-center">
-        <p className="text-muted-foreground">
-          Error loading records. Please try again later.
-        </p>
-      </div>
-    )
-  }
+										{(record.updatedTime || record.updated_at) && (
+											<div className="flex flex-col gap-0.5">
+												<span className="text-sm text-gray-500 dark:text-gray-400">
+													Updated
+												</span>
+												<span className="text-sm leading-tight">
+													{formatDate(record.updatedTime || record.updated_at)}
+												</span>
+											</div>
+										)}
+									</div>
+								</div>
+							);
+						})
+					)}
+					{hasMore && !isLoading && (
+						<div className="py-3 text-center">
+							<button
+								onClick={onLoadMore}
+								className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 font-medium"
+							>
+								Load More
+							</button>
+						</div>
+					)}
+				</div>
+				<ScrollBar orientation="vertical" />
+			</ScrollArea>
 
-  return (
-    <div className="relative">
-      <ScrollArea 
-        className="h-[800px] w-full"
-        scrollHideDelay={0}
-      >
-        <div className="space-y-3 p-4 pr-6">
-          {isLoading ? (
-            Array.from({ length: 3 }).map((_, index) => (
-              <div
-                key={`skeleton-${index}`}
-                className="rounded-xl bg-sky-100/60 dark:bg-sky-900/20 p-4 shadow-sm"
-              >
-                <Skeleton className="h-7 w-1/3 mb-3" />
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <Skeleton className="h-12 w-full" />
-                  <Skeleton className="h-12 w-full" />
-                  <Skeleton className="h-12 w-full" />
-                  <Skeleton className="h-12 w-full" />
-                </div>
-              </div>
-            ))
-          ) : records.length === 0 ? (
-            <div className="text-center text-muted-foreground py-8">
-              No records found
-            </div>
-          ) : (
-            records.map((record) => {
-              const displayFields = getDisplayableFields(record)
-              const displayId = getDisplayId(record)
-              
-              return (
-                <div
-                  key={`${displayId}-${record.customerId}`}
-                  className="rounded-xl bg-sky-100/60 dark:bg-sky-900/20 p-4 shadow-sm hover:shadow-md transition-shadow group relative"
-                >
-                  <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                      onClick={() => handleDownload(record)}
-                      disabled={downloadingFileId === record.id}
-                      className="p-2 rounded-full hover:bg-sky-200/60 dark:hover:bg-sky-800/60 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      title="Download file"
-                    >
-                      {downloadingFileId === record.id ? (
-                        <Loader2 className="h-4 w-4 text-gray-600 dark:text-gray-400 animate-spin" />
-                      ) : (
-                        <Download className="h-4 w-4 text-gray-600 dark:text-gray-400" />
-                      )}
-                    </button>
-                    <button
-                      onClick={() => handleDelete(record)}
-                      className="p-2 rounded-full hover:bg-red-200/60 dark:hover:bg-red-800/60 transition-colors"
-                      title="Delete record"
-                    >
-                      <Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />
-                    </button>
-                  </div>
-                  <div className="mb-3">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 leading-tight truncate">
-                      ID: {displayId}
-                    </h3>
-                    {record.name && (
-                      <p className="text-sm text-gray-600 dark:text-gray-400 truncate" title={record.name}>
-                        {truncateText(record.name, 50)}
-                      </p>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    {Object.entries(displayFields).map(([key, value]) => {
-                      const isUrlValue = isUrl(value);
-                      const displayValue = isUrlValue 
-                        ? truncateUrl(value, 50)
-                        : truncateText(value, 30);
-                      
-                      // Normalize URL for href (add protocol if missing)
-                      const getUrlHref = (url: string): string => {
-                        if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('mailto:') || url.startsWith('ftp://')) {
-                          return url;
-                        }
-                        if (url.startsWith('www.')) {
-                          return `https://${url}`;
-                        }
-                        return `https://${url}`;
-                      };
-                      
-                      return (
-                        <div key={key} className="flex flex-col gap-0.5 min-w-0">
-                          <span className="text-sm text-gray-500 dark:text-gray-400 capitalize truncate">{key}</span>
-                          {isUrlValue ? (
-                            <a
-                              href={getUrlHref(value)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-sm leading-tight text-blue-600 dark:text-blue-400 hover:underline truncate"
-                              title={value}
-                            >
-                              {displayValue}
-                            </a>
-                          ) : (
-                            <span className="text-sm leading-tight truncate" title={value}>
-                              {displayValue}
-                            </span>
-                          )}
-                        </div>
-                      );
-                    })}
-                    
-                    {/* Show created/updated time if available */}
-                    {(record.createdTime || record.created_at) && (
-                      <div className="flex flex-col gap-0.5">
-                        <span className="text-sm text-gray-500 dark:text-gray-400">Created</span>
-                        <span className="text-sm leading-tight">
-                          {formatDate(record.createdTime || record.created_at)}
-                        </span>
-                      </div>
-                    )}
-                    
-                    {(record.updatedTime || record.updated_at) && (
-                      <div className="flex flex-col gap-0.5">
-                        <span className="text-sm text-gray-500 dark:text-gray-400">Updated</span>
-                        <span className="text-sm leading-tight">
-                          {formatDate(record.updatedTime || record.updated_at)}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )
-            })
-          )}
-          {hasMore && !isLoading && (
-            <div className="py-3 text-center">
-              <button
-                onClick={onLoadMore}
-                className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 font-medium"
-              >
-                Load More
-              </button>
-            </div>
-          )}
-        </div>
-        <ScrollBar orientation="vertical" />
-      </ScrollArea>
-
-      {selectedRecord && (
-        <DeleteConfirmationDialog
-          isOpen={isDeleteDialogOpen}
-          onClose={() => setIsDeleteDialogOpen(false)}
-          onConfirm={handleDeleteComplete}
-          record={selectedRecord}
-          onRecordDeleted={onRecordDeleted}
-        />
-      )}
-    </div>
-  )
-} 
+			{selectedRecord && (
+				<>
+					<EditRecordModal
+						record={selectedRecord}
+						isOpen={isEditModalOpen}
+						onClose={() => {
+							setIsEditModalOpen(false);
+							setSelectedRecord(null);
+						}}
+						onComplete={() => {
+							onRecordUpdated?.();
+						}}
+					/>
+					<DeleteConfirmationDialog
+						isOpen={isDeleteDialogOpen}
+						onClose={() => setIsDeleteDialogOpen(false)}
+						onConfirm={handleDeleteComplete}
+						record={selectedRecord}
+						onRecordDeleted={onRecordDeleted}
+					/>
+				</>
+			)}
+		</div>
+	);
+}

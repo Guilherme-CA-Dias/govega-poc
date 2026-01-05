@@ -1,77 +1,41 @@
 export const DEFAULT_SCHEMAS = {
-	files: {
+	accounts: {
 		properties: {
-			id: { type: "string", title: "ID" },
+			id: { type: "string", title: "ID", readOnly: true },
 			name: { type: "string", title: "Name" },
-			email: { type: "string", title: "Email", format: "email" },
-			phone: { type: "string", title: "Phone Number", format: "phone" },
+			code: { type: "string", title: "Code" },
+			description: { type: "string", title: "Description" },
+			classification: {
+				type: "string",
+				title: "Classification",
+				enum: ["Asset", "Liability", "Equity", "Revenue", "Expense"],
+			},
+			type: { type: "string", title: "Type" },
 			status: {
 				type: "string",
 				title: "Status",
-				enum: ["Active", "Inactive", "Pending"],
-				default: "Active",
+				enum: ["Active", "Inactive", "Archived"],
 			},
-		},
-		required: ["id", "name", "email"],
-	},
-	companies: {
-		properties: {
-			id: { type: "string", title: "ID" },
-			name: { type: "string", title: "Company Name" },
-			website: { type: "string", title: "Website", format: "uri" },
-			industry: {
+			currentBalance: { type: "number", title: "Current Balance" },
+			currency: { type: "string", title: "Currency" },
+			taxRateId: { type: "string", title: "Tax Rate ID" },
+			companyId: { type: "string", title: "Company ID" },
+			createdTime: {
 				type: "string",
-				title: "Industry",
-				enum: [
-					"Technology",
-					"Healthcare",
-					"Finance",
-					"Manufacturing",
-					"Retail",
-					"Other",
-				],
+				title: "Created Time",
+				format: "date-time",
+				readOnly: true,
 			},
-			size: {
+			createdBy: { type: "string", title: "Created By", readOnly: true },
+			updatedTime: {
 				type: "string",
-				title: "Company Size",
-				enum: ["1-10", "11-50", "51-200", "201-500", "501-1000", "1000+"],
+				title: "Updated Time",
+				format: "date-time",
+				readOnly: true,
 			},
+			updatedBy: { type: "string", title: "Updated By", readOnly: true },
 		},
 		required: ["id", "name"],
-	},
-	tasks: {
-		properties: {
-			id: { type: "string", title: "ID" },
-			name: { type: "string", title: "Name" },
-			taskName: { type: "string", title: "Task Name" },
-			description: { type: "string", title: "Description" },
-			status: {
-				type: "string",
-				title: "Status",
-				enum: ["Not Started", "In Progress", "Completed", "Deferred"],
-			},
-			priority: {
-				type: "string",
-				title: "Priority",
-				enum: ["Low", "Medium", "High", "Urgent"],
-			},
-			dueDate: { type: "string", title: "Due Date", format: "date" },
-			assignedTo: { type: "string", title: "Assigned To" },
-		},
-		required: ["id", "name", "taskName"],
-	},
-	folders: {
-		properties: {
-			id: { type: "string", title: "ID" },
-			name: { type: "string", title: "Name" },
-			email: { type: "string", title: "Email", format: "email" },
-			phone: { type: "string", title: "Phone Number", format: "phone" },
-			status: {
-				type: "string",
-				title: "Status",
-				enum: ["Active", "Inactive", "Pending"],
-			},
-		},
 	},
 } as const;
 

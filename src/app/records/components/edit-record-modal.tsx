@@ -11,10 +11,11 @@ import { useSchema } from "@/hooks/useSchema";
 import { Record } from "@/types/record";
 import { Loader2 } from "lucide-react";
 import { DataInput } from "@integration-app/react";
-import { sendToWebhook } from "@/lib/webhook-utils";
-import { ensureAuth } from "@/lib/auth";
+import type { DataSchema } from "@integration-app/sdk";
+import { useIntegrationApp, useIntegrations } from "@integration-app/react";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
-import { RECORD_ACTIONS } from "@/lib/constants";
+import { getAuthHeaders } from "@/lib/fetch-utils";
+import { Minimizer } from "@/components/ui/minimizer";
 
 interface EditRecordModalProps {
 	record: Record;
@@ -40,6 +41,11 @@ export function EditRecordModal({
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [fieldChanges, setFieldChanges] = useState<FieldChange[]>([]);
 	const [error, setError] = useState<string | null>(null);
+	const [selectedIntegrationKey, setSelectedIntegrationKey] =
+		useState<string>("");
+
+	const integrationApp = useIntegrationApp();
+	const { integrations } = useIntegrations();
 
 	// Get schema for the record type
 	const {
@@ -47,6 +53,27 @@ export function EditRecordModal({
 		isLoading: schemaLoading,
 		error: schemaError,
 	} = useSchema(record.recordType);
+
+	// Filter integrations to only show those with connections
+	const availableIntegrations = integrations.filter(
+		(integration) => integration.connection
+	);
+
+	// Empty variables schema (can be extended later if needed)
+	const variablesSchema: DataSchema = {
+		type: "object",
+		properties: {},
+	};
+
+	// Set default integration key when modal opens
+	useEffect(() => {
+		if (isOpen && availableIntegrations.length > 0 && !selectedIntegrationKey) {
+			const firstIntegration = availableIntegrations[0];
+			if (firstIntegration?.key) {
+				setSelectedIntegrationKey(firstIntegration.key);
+			}
+		}
+	}, [isOpen, availableIntegrations, selectedIntegrationKey]);
 
 	// Reset form data when record changes
 	useEffect(() => {
@@ -86,27 +113,36 @@ export function EditRecordModal({
 
 		if (isSubmitting) return; // Prevent double submission
 
+		if (!selectedIntegrationKey) {
+			setError("Please select an integration");
+			return;
+		}
+
 		setIsSubmitting(true);
 		setError(null); // Clear any previous errors
 
 		try {
-			const auth = await ensureAuth();
-
-			// Prepare webhook payload
 			// Use ExternalId from fields if available, otherwise use id
-			const recordId = record.fields?.ExternalId || record.id;
-			const webhookPayload: any = {
-				type: "updated" as const,
-				data: {
-					...formData,
-					id: recordId,
-					recordType: record.recordType,
-				},
-				customerId: auth.customerId,
-			};
+			const accountId = record.fields?.ExternalId || record.id;
 
-			// Send webhook
-			await sendToWebhook(webhookPayload);
+			// Call the update API endpoint
+			const response = await fetch("/api/records/update", {
+				method: "PUT",
+				headers: {
+					"Content-Type": "application/json",
+					...getAuthHeaders(),
+				},
+				body: JSON.stringify({
+					integrationKey: selectedIntegrationKey,
+					id: accountId,
+					fields: formData.fields || {},
+				}),
+			});
+
+			if (!response.ok) {
+				const errorData = await response.json();
+				throw new Error(errorData.error || "Failed to update account");
+			}
 
 			// Use setTimeout to avoid flushSync issues
 			setTimeout(() => {
@@ -144,7 +180,8 @@ export function EditRecordModal({
 			<DialogContent className="sm:max-w-[900px] h-[80vh] bg-white dark:bg-gray-800">
 				<DialogHeader className="space-y-1.5">
 					<DialogTitle className="text-lg font-semibold">
-						Edit Record - ID: {formData?.fields?.ExternalId || formData?.id || 'N/A'}
+						Edit Record - ID:{" "}
+						{formData?.fields?.ExternalId || formData?.id || "N/A"}
 					</DialogTitle>
 				</DialogHeader>
 				{schemaLoading ? (
@@ -161,13 +198,39 @@ export function EditRecordModal({
 									</p>
 								</div>
 							)}
+							{availableIntegrations.length > 0 && (
+								<div className="space-y-2">
+									<label className="text-sm font-medium">Integration</label>
+									<select
+										value={selectedIntegrationKey}
+										onChange={(e) => setSelectedIntegrationKey(e.target.value)}
+										className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm"
+										disabled={isSubmitting}
+									>
+										{availableIntegrations.map((integration) => (
+											<option key={integration.key} value={integration.key}>
+												{integration.name}
+											</option>
+										))}
+									</select>
+								</div>
+							)}
 							{schema && formData && (
-								<div className="rounded-xl bg-sky-100/60 dark:bg-sky-900/20 p-4 shadow-sm">
-									<DataInput
-										schema={schema}
-										value={formData.fields || {}}
-										onChange={handleFieldChange}
-									/>
+								<div className="space-y-2 pt-4">
+									<Minimizer title="Edit Account Fields" defaultOpen={true}>
+										<div
+											className="relative z-[1] isolate"
+											onFocus={(e) => e.stopPropagation()}
+											onBlur={(e) => e.stopPropagation()}
+										>
+											<DataInput
+												schema={schema as DataSchema}
+												value={formData.fields || {}}
+												variablesSchema={variablesSchema}
+												onChange={handleFieldChange}
+											/>
+										</div>
+									</Minimizer>
 								</div>
 							)}
 							<DialogFooter className="gap-2 sm:gap-0">

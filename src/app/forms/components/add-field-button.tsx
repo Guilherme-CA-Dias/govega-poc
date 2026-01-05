@@ -87,7 +87,7 @@ export function AddFieldButton({ recordType, onFieldAdded }: AddFieldButtonProps
           Add Field
         </Button>
       </DialogTrigger>
-      <DialogContent className="bg-white dark:bg-gray-950 border-border">
+      <DialogContent className="bg-white dark:bg-gray-950 border-border z-50">
         <DialogHeader>
           <DialogTitle className="text-gray-900 dark:text-gray-100">Add New Field</DialogTitle>
         </DialogHeader>

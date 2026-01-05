@@ -1,12 +1,7 @@
 export const RECORD_ACTIONS = [
 	{
-		key: "get-files",
-		name: "Files",
-		type: "default",
-	},
-	{
-		key: "get-folders",
-		name: "Folders",
+		key: "get-accounts",
+		name: "Accounts",
 		type: "default",
 	},
 ] as const;
